@@ -6,22 +6,31 @@ def _clone_or_update(ctx):
     ref = ctx.attr.commit
   else:
     ref = "tags/" + ctx.attr.tag
+  if ctx.attr.init_submodules:
+    extra_clone_args = " --recursive"
+    extra_command = "git submodule update --init --recursive"
+  else:
+    extra_clone_args = ""
+    extra_command = ""
 
   st = ctx.execute(["bash", '-c', """
 set -ex
 ( cd {working_dir} &&
     if ! ( cd '{dir}' && git rev-parse --git-dir ) >/dev/null 2>&1; then
       rm -rf '{dir}'
-      git clone '{remote}' '{dir}'
+      git clone {extra_clone_args} '{remote}' '{dir}'
     fi
     cd '{dir}'
     git reset --hard {ref} || (git fetch && git reset --hard {ref})
+    {extra_command}
     git clean -xdf )
   """.format(
     working_dir=ctx.path(".").dirname,
     dir=ctx.path("."),
     remote=ctx.attr.remote,
     ref=ref,
+    extra_clone_args=extra_clone_args,
+    extra_command=extra_command,
   )])
   if st.return_code != 0:
     fail("error cloning %s:\n%s" % (ctx.name, st.stderr))
@@ -42,6 +51,7 @@ _common_attrs = {
   "remote": attr.string(mandatory=True),
   "commit": attr.string(default=""),
   "tag": attr.string(default=""),
+  "init_submodules": attr.bool(default=False),
 }
 
 
